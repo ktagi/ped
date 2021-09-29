@@ -22,4 +22,9 @@ jobs:
       run: go build -v ./...
 
     - name: Test
-      run: go test -v ./...
+      run: go test -v ./... > result
+      
+    - uses: actions/upload-artifact@v2.2.4
+      with:
+        name: test-result
+        path: result
