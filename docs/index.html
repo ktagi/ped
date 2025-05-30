@@ -2,9 +2,164 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
-  <title>Hello World</title>
+  <title>MAZE GENERATOR</title>
 </head>
 <body>
-  <h1>Hello World</h1>
+  <form>
+    <select id="selectFloor">
+      <option value="">-- SELECT FLOOR --</option>
+    </select>
+  </form>
+<pre id="output" style="border: 10px solid silver; padding: 3px; display: inline-block"></pre>
+<script>
+
+const COLS = 17;
+const ROWS = 8;
+const DELAY_MS = 100;
+
+class Ilfsr47 {
+  constructor(s) {
+    this.r = s & 0xff;
+  }
+  get() {
+    this.r = 0xff & ((this.r << 1) | (~((this.r >> 7) ^ (this.r >> 4)) & 1));
+    return this.r;
+  }
+}
+
+class Pillars {
+  static Dir = { N: -1, U: 0, R: 1, D: 2, L: 3 };
+  constructor(cols, rows, rng) {
+    this.cols = cols;
+    this.rows = rows;
+    this.grid = Array.from({ length: cols }, () => Array(rows).fill(Pillars.Dir.N));
+    this.rng = rng;
+    this.history = [];
+  }
+  get(x, y) {
+    return this.grid[x][y];
+  }
+  set(x, y, d) {
+    this.grid[x][y] = d;
+    this.history.push({x, y, d});
+  }
+  put(x, y) {
+    while (this.get(x, y) === Pillars.Dir.N) {
+      let d, nx, ny;
+      while (true) {
+        d = this.rng.get() % 4;
+        switch (d) {
+          case Pillars.Dir.U:
+            if (y === 0) {
+               this.set(x, y, d);
+              return;
+            }
+            nx = x; ny = y-1;
+            if (this.get(nx, ny) === Pillars.Dir.D) continue;
+            break;
+          case Pillars.Dir.R:
+            if (x === 0) {
+               this.set(x, y, d);
+              return;
+            }
+            nx = x-1; ny = y;
+            if (this.get(nx, ny) === Pillars.Dir.L) continue;
+            break;
+          case Pillars.Dir.D:
+            if (y === this.rows-1) {
+               this.set(x, y, d);
+              return;
+            }
+            nx = x; ny = y+1;
+            if (this.get(nx, ny) === Pillars.Dir.U) continue;
+            break;
+          case Pillars.Dir.L:
+            if (x === this.cols-1) {
+               this.set(x, y, d);
+              return;
+            }
+            nx = x+1; ny = y;
+            if (this.get(nx, ny) === Pillars.Dir.R) continue;
+            break;
+        }
+        break;  // valid direction selected
+      }
+      this.set(x, y, d);
+      x = nx; y = ny;
+    }
+  }
+   generate() {
+    for (let x=0; x<this.cols; x++) {
+      for (let y=0; y<this.rows; y++) {
+         this.put(x, y);
+      }
+      // break; // for debug
+    }
+  }
+}
+
+function create() {
+  return Array.from({ length: ROWS+(ROWS+1) }, () => Array(COLS+((COLS+1)*2)).fill(' '));  // y, x
+}
+
+function output(m) {
+  document.getElementById("output").textContent = m.map(r => r.join('')).join('\n');
+}
+
+async function draw(history, signal) {
+  const m = create();
+  for (let r of history) {
+    if (signal.aborted)
+      return;
+    mx = (COLS+((COLS+1)*2))-((r.x+1)*3);
+    my = (r.y+1)*2-1;
+    m[my][mx] = '+';
+    switch (r.d) {
+      case Pillars.Dir.U: m[my-1][mx]               = '|'; break;
+      case Pillars.Dir.R: m[my][mx+1] = m[my][mx+2] = '-'; break;
+      case Pillars.Dir.D: m[my+1][mx]               = '|'; break;
+      case Pillars.Dir.L: m[my][mx-1] = m[my][mx-2] = '-'; break;
+    }
+    output(m);
+    await new Promise(resolve => setTimeout(resolve, DELAY_MS));
+  }
+}
+
+window.addEventListener('DOMContentLoaded', () => {
+let abortController = null;
+  const select = document.getElementById('selectFloor');
+  select.addEventListener('change', async (e) => {
+
+    if (abortController) {
+      abortController.abort();
+    }
+    abortController = new AbortController();
+
+    output(create());
+
+    if (e.target.value === "") {
+      return;
+    }
+
+    const f = e.target.value;
+    const r = new Ilfsr47(f < 60 ? f-1 : 0xff);
+    const p = new Pillars(COLS, ROWS, r);
+
+    p.generate();
+
+    draw(p.history, abortController.signal);
+  })
+
+  for (let i=1; i<=60; i++) {
+    const option = document.createElement('option');
+    option.value = i;
+    option.textContent = "FLOOR " + i;
+    select.appendChild(option);
+  }
+
+  output(create());
+});
+
+</script>
 </body>
 </html>
