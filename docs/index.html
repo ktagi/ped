@@ -18,82 +18,83 @@ const ROWS = 8;
 const DELAY_MS = 100;
 
 class Ilfsr47 {
+  #r;
   constructor(s) {
-    this.r = s & 0xff;
+    this.#r = s & 0xff;
   }
   get() {
-    this.r = 0xff & ((this.r << 1) | (~((this.r >> 7) ^ (this.r >> 4)) & 1));
-    return this.r;
+    this.#r = 0xff & ((this.#r << 1) | (~((this.#r >> 7) ^ (this.#r >> 4)) & 1));
+    return this.#r;
   }
 }
 
 class Pillars {
   static Dir = { N: -1, U: 0, R: 1, D: 2, L: 3 };
-  constructor(cols, rows, rng) {
-    this.cols = cols;
-    this.rows = rows;
-    this.grid = Array.from({ length: cols }, () => Array(rows).fill(Pillars.Dir.N));
-    this.rng = rng;
-    this.history = [];
+  #cols; #rows; #grid; #prng;
+  #get(x, y) {
+    return this.#grid[x][y];
   }
-  get(x, y) {
-    return this.grid[x][y];
+  #set(x, y, d) {
+    this.#grid[x][y] = d;
+    this.walls.push({x, y, d});
   }
-  set(x, y, d) {
-    this.grid[x][y] = d;
-    this.history.push({x, y, d});
-  }
-  put(x, y) {
-    while (this.get(x, y) === Pillars.Dir.N) {
+  #put(x, y) {
+    while (this.#get(x, y) === Pillars.Dir.N) {
       let d, nx, ny;
       while (true) {
-        d = this.rng.get() % 4;
+        d = this.#prng.get() % 4;
         switch (d) {
           case Pillars.Dir.U:
             if (y === 0) {
-               this.set(x, y, d);
+               this.#set(x, y, d);
               return;
             }
             nx = x; ny = y-1;
-            if (this.get(nx, ny) === Pillars.Dir.D) continue;
+            if (this.#get(nx, ny) === Pillars.Dir.D) continue;
             break;
           case Pillars.Dir.R:
             if (x === 0) {
-               this.set(x, y, d);
+               this.#set(x, y, d);
               return;
             }
             nx = x-1; ny = y;
-            if (this.get(nx, ny) === Pillars.Dir.L) continue;
+            if (this.#get(nx, ny) === Pillars.Dir.L) continue;
             break;
           case Pillars.Dir.D:
-            if (y === this.rows-1) {
-               this.set(x, y, d);
+            if (y === this.#rows-1) {
+               this.#set(x, y, d);
               return;
             }
             nx = x; ny = y+1;
-            if (this.get(nx, ny) === Pillars.Dir.U) continue;
+            if (this.#get(nx, ny) === Pillars.Dir.U) continue;
             break;
           case Pillars.Dir.L:
-            if (x === this.cols-1) {
-               this.set(x, y, d);
+            if (x === this.#cols-1) {
+               this.#set(x, y, d);
               return;
             }
             nx = x+1; ny = y;
-            if (this.get(nx, ny) === Pillars.Dir.R) continue;
+            if (this.#get(nx, ny) === Pillars.Dir.R) continue;
             break;
         }
         break;  // valid direction selected
       }
-      this.set(x, y, d);
+      this.#set(x, y, d);
       x = nx; y = ny;
     }
   }
-   generate() {
-    for (let x=0; x<this.cols; x++) {
-      for (let y=0; y<this.rows; y++) {
-         this.put(x, y);
+  constructor(cols, rows, prng) {
+    this.#cols = cols;
+    this.#rows = rows;
+    this.#grid = Array.from({ length: cols }, () => Array(rows).fill(Pillars.Dir.N));
+    this.#prng = prng;
+    this.walls = [];
+  }
+  generate() {
+    for (let x=0; x<this.#cols; x++) {
+      for (let y=0; y<this.#rows; y++) {
+         this.#put(x, y);
       }
-      // break; // for debug
     }
   }
 }
@@ -142,12 +143,12 @@ let abortController = null;
     }
 
     const f = e.target.value;
-    const r = new Ilfsr47(f < 60 ? f-1 : 0xff);
+    const r = new Ilfsr47(f<60 ? f-1 : 0xff);
     const p = new Pillars(COLS, ROWS, r);
 
     p.generate();
 
-    draw(p.history, abortController.signal);
+    draw(p.walls, abortController.signal);
   })
 
   for (let i=1; i<=60; i++) {
